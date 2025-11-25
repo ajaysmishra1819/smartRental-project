@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>SmartRental — Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <!-- Ethers v6 UMD -->
+  <script src="https://cdn.jsdelivr.net/npm/ethers@6.7.1/dist/ethers.umd.min.js"></script>
+  <style>
+    :root{--bg:#f6f7fb;--card:#ffffff;--muted:#64748b;--accent:#4f46e5;--success:#16a34a}
+    *{box-sizing:border-box;font-family:Inter,system-ui,Arial,sans-serif}
+    body{margin:0;background:linear-gradient(180deg,#f8fafc 0%,var(--bg) 100%);color:#0f172a}
+    .wrap{max-width:1100px;margin:28px auto;padding:20px}
+    header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+    .brand{display:flex;align-items:center;gap:14px}
+    .brand img{height:48px;border-radius:8px;object-fit:cover;border:1px solid #e6e9f2}
+    .brand h1{font-size:20px;margin:0}
+    .actions{display:flex;gap:10px;align-items:center}
+    .btn{background:var(--accent);color:white;padding:10px 14px;border-radius:10px;border:none;cursor:pointer;font-weight:600}
+    .btn.ghost{background:transparent;color:var(--accent);border:1px solid rgba(79,70,229,0.12)}
+    .grid{display:grid;grid-template-columns:1fr 360px;gap:18px}
+
+    /* left column */
+    .panel{background:var(--card);padding:18px;border-radius:12px;box-shadow:0 6px 18px rgba(15,23,42,0.06)}
+    .cards{display:flex;gap:12px;margin-bottom:14px}
+    .stat{flex:1;padding:12px;border-radius:10px;background:linear-gradient(180deg,#fff,#fbfbff);border:1px solid #eef2ff}
+    .stat h3{margin:0;font-size:13px;color:var(--muted)}
+    .stat p{margin:6px 0 0;font-size:20px;font-weight:700}
+
+    table{width:100%;border-collapse:collapse;margin-top:12px}
+    th,td{padding:12px 10px;text-align:left;border-bottom:1px solid #f1f5f9;font-size:14px}
+    th{font-size:13px;color:var(--muted)}
+    .tag{display:inline-block;padding:6px 8px;border-radius:8px;font-weight:600;font-size:13px}
+    .tag.available{background:#ecfeef;color:var(--success);border:1px solid rgba(16,185,129,0.08)}
+    .tag.unavailable{background:#fff7ed;color:#b45309;border:1px solid rgba(245,158,11,0.08)}
+
+    /* right column */
+    .sidebar .card{margin-bottom:12px}
+    .field{display:flex;flex-direction:column}
+    .field label{font-size:13px;color:var(--muted);margin-bottom:6px}
+    .field input{padding:10px;border-radius:8px;border:1px solid #e6eef8}
+
+    footer{margin-top:18px;text-align:center;color:#94a3b8;font-size:13px}
+
+    /* responsive */
+    @media (max-width:900px){.grid{grid-template-columns:1fr;}.sidebar{order:2}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="brand">
+        <!-- local screenshot used as a logo preview (your uploaded screenshot path) -->
+        <img src="/mnt/data/Screenshot 2025-11-24 121109.png" alt="logo"/>
+        <div>
+          <h1>SmartRental</h1>
+          <div style="font-size:13px;color:var(--muted)">Simple rental management on local Hardhat</div>
+        </div>
+      </div>
+      <div class="actions">
+        <div id="accountInfo" style="font-size:13px;color:var(--muted)">Not connected</div>
+        <button id="connectBtn" class="btn">Connect Wallet</button>
+      </div>
+    </header>
+
+    <div class="grid">
+      <main>
+        <div class="panel">
+          <div class="cards">
+            <div class="stat">
+              <h3>Total Cars</h3>
+              <p id="totalCars">—</p>
+            </div>
+            <div class="stat">
+              <h3>Active Rentals</h3>
+              <p id="activeRentals">—</p>
+            </div>
+            <div class="stat">
+              <h3>Revenue (ETH)</h3>
+              <p id="revenue">—</p>
+            </div>
+          </div>
+
+          <h3 style="margin:0 0 8px">Available Cars</h3>
+          <table id="carsTable">
+            <thead>
+              <tr><th>ID</th><th>Name</th><th>Price/day</th><th>Status</th><th></th></tr>
+            </thead>
+            <tbody>
+              <!-- populated by JS -->
+            </tbody>
+          </table>
+
+        </div>
+
+        <div class="panel" style="margin-top:14px">
+          <h3 style="margin-top:0">Recent Activity</h3>
+          <div id="activityList" style="color:var(--muted);font-size:14px;padding-top:8px">No activity yet.</div>
+        </div>
+      </main>
+
+      <aside class="sidebar">
+        <div class="panel card">
+          <h3 style="margin-top:0">List a Car</h3>
+          <div class="field"><label>Car name</label><input id="carName" placeholder="e.g. Honda Civic"/></div>
+          <div class="field" style="margin-top:8px"><label>Price per day (ETH)</label><input id="price" placeholder="0.01"/></div>
+          <div style="display:flex;gap:8px;margin-top:10px">
+            <button id="listBtn" class="btn">List Car</button>
+            <button id="clearBtn" class="btn ghost">Clear</button>
+          </div>
+          <div id="listResult" style="margin-top:10px;color:#ef4444"></div>
+        </div>
+
+        <div class="panel card">
+          <h3 style="margin-top:0">Rent a Car</h3>
+          <div class="field"><label>Car ID</label><input id="rentCarId" placeholder="0"/></div>
+          <div class="field" style="margin-top:8px"><label>Days</label><input id="rentDays" placeholder="1"/></div>
+          <div style="display:flex;gap:8px;margin-top:10px">
+            <button id="rentBtn" class="btn">Rent</button>
+            <button id="estimateBtn" class="btn ghost">Estimate</button>
+          </div>
+          <div id="rentResult" style="margin-top:10px;color:#ef4444"></div>
+        </div>
+
+        <div class="panel card">
+          <h3 style="margin-top:0">Return / Collect</h3>
+          <div class="field"><label>Rental ID</label><input id="rentalId" placeholder="0"/></div>
+          <div style="display:flex;gap:8px;margin-top:10px">
+            <button id="returnBtn" class="btn ghost">Return</button>
+            <button id="collectBtn" class="btn">Collect</button>
+          </div>
+          <div id="rcResult" style="margin-top:10px;color:#ef4444"></div>
+        </div>
+
+      </aside>
+    </div>
+
+    <footer>
+      Built for local testing · Hardhat node · Not for production
+    </footer>
+  </div>
+
+  <script>
+    // CONTRACT CONFIG - replace this address with your deployed contract address
+    const CONTRACT_ADDRESS = "0x5FbDB2315678afecb367f032d93F642f64180aa3"; // <-- replace if different
+
+    const ABI = [
+      "function listCar(string name, uint256 pricePerDayWei) returns (uint256)",
+      "function rentCar(uint256 carId, uint256 rentalDays) payable returns (uint256)",
+      "function returnCar(uint256 rentalId)",
+      "function collect(uint256 rentalId)",
+      "function getCar(uint256 carId) view returns (tuple(uint256 id, address owner, string name, uint256 pricePerDayWei, bool available))",
+      "function getRental(uint256 rentalId) view returns (tuple(uint256 id,uint256 carId,address renter,uint256 paid,bool returned))",
+      "function totalCars() view returns (uint256)",
+      "function totalActiveRentals() view returns (uint256)",
+      "function totalRevenueWei() view returns (uint256)"
+    ];
+
+    // providers
+    const RPC_URL = "http://127.0.0.1:8545";
+    const rpcProvider = new ethers.JsonRpcProvider(RPC_URL);
+    let mmProvider, signer, contract, readOnlyContract;
+
+    // UI helpers
+    const $ = id => document.getElementById(id);
+    function showMsg(id, msg, isErr=true){ $(id).innerText = msg; $(id).style.color = isErr? '#ef4444' : '#0f5132'; }
+
+    // small helper to avoid XSS when inserting names
+    function escapeHtml(str) {
+      return String(str)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+    }
+
+    /***********************
+     * CONNECT METAMASK
+     ***********************/
+    async function connect() {
+      if (!window.ethereum) return alert('Install MetaMask');
+      await window.ethereum.request({ method: 'eth_requestAccounts' });
+      mmProvider = new ethers.BrowserProvider(window.ethereum);
+      signer = await mmProvider.getSigner();
+      contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
+      readOnlyContract = new ethers.Contract(CONTRACT_ADDRESS, ABI, rpcProvider);
+      const addr = await signer.getAddress();
+      $('accountInfo').innerText = addr;
+      $('connectBtn').innerText = 'Connected';
+      $('connectBtn').disabled = true;
+      loadSummary();
+      window.ethereum.on('accountsChanged', ()=> location.reload());
+      window.ethereum.on('chainChanged', ()=> location.reload());
+    }
+    $('connectBtn').onclick = connect;
+
+    /***********************
+     * LOAD SUMMARY + CARS
+     ***********************/
+    async function loadSummary(){
+      try{
+        // read totals using readOnlyContract. wrap in try so missing functions don't break UI
+        let total = 0;
+        try { total = Number((await readOnlyContract.totalCars()).toString()); } catch(e) { console.warn('totalCars missing or failed', e); }
+        let active = 0;
+        try { active = Number((await readOnlyContract.totalActiveRentals()).toString()); } catch(e) { console.warn('totalActiveRentals missing or failed', e); }
+        let rev = 0n;
+        try { rev = BigInt((await readOnlyContract.totalRevenueWei()).toString()); } catch(e) { console.warn('totalRevenueWei missing or failed', e); }
+
+        $('totalCars').innerText = total;
+        $('activeRentals').innerText = active;
+        $('revenue').innerText = rev ? ethers.formatEther(rev.toString()) : '0';
+
+        // load cars table
+        await loadCars(total);
+      }catch(e){ console.warn('Summary load failed', e); }
+    }
+
+    /***********************
+     * Robust loadCars
+     ***********************/
+    async function loadCars(count) {
+      const tbody = document.querySelector('#carsTable tbody');
+      tbody.innerHTML = '';
+
+      // handle no cars
+      if (!count || Number(count) === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="color:#64748b">No cars yet.</td></tr>';
+        return;
+      }
+
+      // Build an array of promises to fetch each car in parallel (safer + faster)
+      const calls = [];
+      for (let i = 0; i < count; i++) {
+        calls.push(
+          readOnlyContract.getCar(i)
+            .then(car => ({ index: i, car }))
+            .catch(err => ({ index: i, err }))
+        );
+      }
+
+      const results = await Promise.all(calls);
+
+      // Render rows in order (0..count-1) so they appear sequentially
+      for (let i = 0; i < results.length; i++) {
+        const res = results[i];
+        if (res.err) {
+          // optionally show a row indicating a failed fetch for debugging
+          console.warn(`getCar(${res.index}) failed:`, res.err);
+          continue;
+        }
+
+        const car = res.car;
+
+        // Ethers may return tuple-like or object. handle both shapes:
+        // car.id or car[0], car.name or car[2], car.pricePerDayWei or car[3], car.available or car[4]
+        const id = Number(car.id ?? car[0]);
+        const name = car.name ?? car[2] ?? '—';
+        const priceWei = car.pricePerDayWei ?? car[3] ?? 0;
+        // priceWei might be BigInt-like or a BigNumber object. Convert safely:
+        let priceEth = '0';
+        try {
+          priceEth = ethers.formatEther(priceWei.toString ? priceWei.toString() : priceWei);
+        } catch (e) {
+          priceEth = '0';
+        }
+        const available = (typeof car.available !== 'undefined') ? Boolean(car.available) : Boolean(car[4]);
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${id}</td>
+          <td>${escapeHtml(name)}</td>
+          <td>${priceEth} ETH</td>
+          <td>${available ? '<span class="tag available">Available</span>' : '<span class="tag unavailable">Rented</span>'}</td>
+          <td><button data-id="${id}" class="btn rentBtn" style="padding:6px 8px;font-size:13px">Rent</button></td>
+        `;
+        tbody.appendChild(tr);
+      }
+
+      // Wire up rent buttons (attach after all rows are rendered)
+      document.querySelectorAll('#carsTable button.rentBtn').forEach(btn => {
+        btn.onclick = (ev) => {
+          const id = Number(ev.currentTarget.dataset.id);
+          document.getElementById('rentCarId').value = String(id);
+          document.getElementById('rentDays').focus();
+        };
+      });
+    }
+
+    /***********************
+     * List Car
+     ***********************/
+    $('listBtn').onclick = async ()=>{
+      try{
+        if(!signer) return alert('Connect wallet first');
+        const name = $('carName').value || 'Car';
+        const eth = $('price').value || '0.01';
+        const wei = ethers.parseEther(eth);
+        const tx = await contract.listCar(name, wei);
+        showMsg('listResult', 'Tx sent: ' + tx.hash, false);
+        await tx.wait();
+        showMsg('listResult', 'Car listed ✅', false);
+        $('carName').value = '';
+        $('price').value = '';
+        loadSummary();
+      }catch(e){ showMsg('listResult', e.message || String(e)); }
+    };
+
+    /***********************
+     * Rent Car
+     ***********************/
+    $('rentBtn').onclick = async ()=>{
+      try{
+        if(!signer) return alert('Connect wallet first');
+        const id = Number($('rentCarId').value);
+        const days = Number($('rentDays').value);
+        if(!Number.isInteger(id) || id<0) return showMsg('rentResult','Invalid car id');
+        if(!Number.isInteger(days) || days<=0) return showMsg('rentResult','Days must be > 0');
+
+        // pre-checks
+        const total = Number((await readOnlyContract.totalCars()).toString());
+        if (id < 0 || id >= total) return showMsg('rentResult', `Invalid car id. Valid range: 0 - ${total-1}`);
+
+        const car = await readOnlyContract.getCar(id);
+        const totalWei = BigInt((car.pricePerDayWei ?? car[3] ?? 0).toString()) * BigInt(days);
+
+        const tx = await contract.rentCar(id, days, { value: totalWei });
+        showMsg('rentResult','Tx sent: '+tx.hash, false);
+        await tx.wait();
+        showMsg('rentResult','Rented successfully ✅', false);
+        loadSummary();
+      }catch(e){ console.error(e); showMsg('rentResult', e?.message || String(e)); }
+    };
+
+    /***********************
+     * Return & Collect
+     ***********************/
+    $('returnBtn').onclick = async ()=>{
+      try{ if(!signer) return alert('Connect wallet'); const r = Number($('rentalId').value); const tx = await contract.returnCar(r); await tx.wait(); showMsg('rcResult','Returned ✅', false); loadSummary(); }catch(e){ showMsg('rcResult', e?.message || String(e)); }
+    };
+    $('collectBtn').onclick = async ()=>{
+      try{ if(!signer) return alert('Connect wallet'); const r = Number($('rentalId').value); const tx = await contract.collect(r); await tx.wait(); showMsg('rcResult','Collected ✅', false); loadSummary(); }catch(e){ showMsg('rcResult', e?.message || String(e)); }
+    };
+
+    // estimate button
+    $('estimateBtn').onclick = async ()=>{
+      try{ const id = Number($('rentCarId').value); const days = Number($('rentDays').value); if(!Number.isInteger(id) || !Number.isInteger(days)) return showMsg('rentResult','Invalid input'); const car = await readOnlyContract.getCar(id); const total = BigInt(car.pricePerDayWei.toString())*BigInt(days); showMsg('rentResult', `Estimated: ${ethers.formatEther(total)} ETH`, false); }catch(e){ showMsg('rentResult', 'Estimate failed'); }
+    };
+
+    // init: try to populate if contract exists
+    (async ()=>{
+      try{
+        const code = await rpcProvider.getCode(CONTRACT_ADDRESS);
+        if(code === '0x'){
+          console.warn('No contract at address. Update CONTRACT_ADDRESS after deploy.');
+          document.querySelector('#carsTable tbody').innerHTML = '<tr><td colspan="5" style="color:#64748b">No contract found. Deploy contract and paste address into the file.</td></tr>';
+        } else {
+          readOnlyContract = new ethers.Contract(CONTRACT_ADDRESS, ABI, rpcProvider);
+          loadSummary();
+        }
+      }catch(e){ console.warn('init failed', e); }
+    })();
+
+  </script>
+</body>
+</html>
